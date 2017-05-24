@@ -1,0 +1,421 @@
+package connectivity.ws.operations;
+
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.SocketTimeoutException;
+import java.net.URL;
+import java.net.URLConnection;
+import java.net.URLEncoder;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+
+import org.apache.commons.codec.binary.Base64;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
+
+import beans.CallData;
+
+import com.aig.common.Constants;
+import com.avaya.sce.runtime.tracking.TraceInfo;
+import com.avaya.sce.runtimecommon.ITraceInfo;
+import com.avaya.sce.runtimecommon.SCESession;
+
+import connectivity.ws.beans.ServiceNowBean;
+import flow.IProjectVariables;
+
+/**
+* This class handles the integration with the Service Now web service and
+* subsequent data processing
+* 
+* @version 1.0 Initial Version
+*/
+public class ServiceNow
+{
+
+	/**
+* @param mySession Session Object
+* @param EMP_ID Employee ID
+* @return int Integer
+*/
+	@SuppressWarnings("static-method")
+	public int getServiceNowData(SCESession mySession, String EMP_ID)
+	{
+
+		TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "getServcie Method Start  ",
+		mySession);
+		NodeList node = null;
+		String value = null, response1 = "noresult";
+		String url = Constants.serviceNowPart1 + EMP_ID + Constants.serviceNowPart2;
+
+		TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+		"Servcie now URL is   " + url, mySession);
+
+		URL obj = null;
+		ServiceNowBean serviceNowBean = new ServiceNowBean();
+		CallData callData =
+		(CallData) mySession.getVariable(IProjectVariables.CALL_DATA)
+		.getSimpleVariable().getObjectValue();
+		int responseCode = 0;
+		HttpURLConnection con = null;
+		try
+		{
+			String username = Constants.serviceNowUser;
+			String password = Constants.serviceNowPwd;
+			String authString = username + ":" + password;
+			byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
+			String authStringEnc = new String(authEncBytes);
+			authStringEnc = "Basic " + authStringEnc;
+
+			TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "auth string: "
+			+ authStringEnc, mySession);
+
+			// Properties systemProperties = System.getProperties();
+			// systemProperties.setProperty("http.proxyHost", "10.87.36.16");
+			// systemProperties.setProperty("http.proxyPort", "80");
+			//
+			// Proxy proxy =
+			// new Proxy(Proxy.Type.HTTP, new InetSocketAddress("10.87.36.16", 80));
+
+			Proxy proxy =
+			new Proxy(Proxy.Type.HTTP, new InetSocketAddress("10.53.130.11", 8088));
+			
+			obj = new URL(url);
+			con = (HttpURLConnection) obj.openConnection(proxy);
+			
+			//URLConnection conn = obj.openConnection();
+			con.setRequestProperty("User-Agent", "Mozilla/5.0");
+
+			TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+			"Servcie now Set header   ", mySession);
+
+			con.setConnectTimeout(Integer.parseInt(Constants.serviceNowTimeOut));
+			con.setReadTimeout(Integer.parseInt(Constants.serviceNowReadTimeOut));
+
+			con.setRequestProperty("Accept", "application/xml");
+			con.setRequestProperty("Authorization", authStringEnc);
+
+			URLEncoder.encode(url, "UTF-8");
+			System.setProperty("jsse.enableSNIExtension", "false");
+
+			responseCode = con.getResponseCode();
+
+			TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+			"Sending 'GET' request to URL ", mySession);
+			TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "Response Code : "
+			+ responseCode, mySession);
+			TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+			"getServcie \nSending 'GET' request to URL  " + url, mySession);
+			TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+			"getServcie nResponse Code  " + responseCode, mySession);
+
+			DocumentBuilderFactory factory = null;
+			DocumentBuilder builder = null;
+			Document doc = null;
+			Element el = null;
+
+			try
+			{
+				Reader reader = new InputStreamReader(con.getInputStream(), "UTF-8");
+				InputSource is = new InputSource(reader);
+				is.setEncoding("UTF-8");
+
+				factory = DocumentBuilderFactory.newInstance();
+				factory.setValidating(false);
+				factory.setNamespaceAware(true);
+				builder = factory.newDocumentBuilder();
+				doc = builder.parse(is);
+				doc.getDocumentElement().normalize();
+
+				el = doc.getDocumentElement();
+			}
+			catch (org.xml.sax.SAXParseException e1)
+			{
+				e1.printStackTrace();
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+				" Error is org.xml.sax.SAXParseException " + e1, mySession);
+			}
+
+			try
+			{
+				// Get the value stored at the key "first_name"
+				node = el.getElementsByTagName("firstName");
+				String first_name = node.item(0).getTextContent();
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, " ******* First Name : "
+				+ first_name, mySession);
+			}
+			catch (Exception e)
+			{
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+				" Error in firstname field" + e.getMessage(), mySession);
+			}
+			// Get the value stored at the key "Last"
+			try
+			{
+				node = el.getElementsByTagName("employeeNumber");
+				String employee_number = node.item(0).getTextContent();
+				serviceNowBean.setEmployee_number(employee_number);
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, " ******* Employee Number : "
+				+ employee_number, mySession);
+			}
+			catch (Exception e)
+			{
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+				" Error in Employee Number field" + e.getMessage(), mySession);
+			}
+			try
+			{
+				node = el.getElementsByTagName("email");
+				String email = node.item(0).getTextContent();
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, " ******* Email : "
+				+ email, mySession);
+			}
+			catch (Exception e)
+			{
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, " Error in email field"
+				+ e.getMessage(), mySession);
+			}
+			try
+			{
+				node = el.getElementsByTagName("location");
+				String location = node.item(0).getTextContent();
+				serviceNowBean.setLocation(location);
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, " ******* Location : "
+				+ location, mySession);
+			}
+			catch (Exception e)
+			{
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+				" Error in location field" + e.getMessage(), mySession);
+			}
+			try
+			{
+				node = el.getElementsByTagName("middleName");
+				String middle_name = node.item(0).getTextContent();
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, " ******* Middle Name : "
+				+ middle_name, mySession);
+			}
+			catch (Exception e)
+			{
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+				" Error in middle name field" + e.getMessage(), mySession);
+			}
+			try
+			{
+				node = el.getElementsByTagName("company");
+				String company = node.item(0).getTextContent();
+				serviceNowBean.setCompany(company);
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, " ******* Company : "
+				+ company, mySession);
+			}
+			catch (Exception e)
+			{
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, " Error in company field"
+				+ e.getMessage(), mySession);
+			}
+			try
+			{
+				node = el.getElementsByTagName("name");
+				String name = node.item(0).getTextContent();
+				serviceNowBean.setName(name);
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, " ******* Name : "
+				+ name, mySession);
+			}
+			catch (Exception e)
+			{
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, " Error in name field"
+				+ e.getMessage(), mySession);
+			}
+			try
+			{
+				node = el.getElementsByTagName("lastName");
+				String last_name = node.item(0).getTextContent();
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, " ******* Name : "
+				+ last_name, mySession);
+			}
+			catch (Exception e)
+			{
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+				" Error in last name field" + e.getMessage(), mySession);
+			}
+
+			try
+			{
+				node = el.getElementsByTagName("userSysId");
+				String sys_id = node.item(0).getTextContent();
+				serviceNowBean.setSysId(sys_id);
+				callData.setSys_ID(sys_id);
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "Value of SYSID : "
+				+ sys_id, mySession);
+			}
+			catch (Exception e)
+			{
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, " Error in sysid field"
+				+ e.getMessage(), mySession);
+			}
+			try
+			{
+				node = el.getElementsByTagName("vip");
+				String u_vip_flag = node.item(0).getTextContent();
+				serviceNowBean.setU_vip_flag(u_vip_flag);
+
+				if (!(u_vip_flag == null) && !(u_vip_flag.equalsIgnoreCase("")))
+				{
+					TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+					"VIP caller check u_vip_flag : " + u_vip_flag, mySession);
+					if (u_vip_flag.contains("Tier"))
+					{
+						TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "VIP caller : Yes ",
+						mySession);
+						mySession.getVariable(IProjectVariables.GLOBAL)
+						.getComplexVariable()
+						.getField(IProjectVariables.GLOBAL_FIELD_VIP_CALLER)
+						.setValue("yes");
+						mySession.getVariable(IProjectVariables.GLOBAL)
+						.getComplexVariable()
+						.getField(IProjectVariables.GLOBAL_FIELD_VIP_FLAG_VALUE)
+						.setValue(u_vip_flag);
+						callData.setVipFlag("yes");
+					}
+					else
+					{
+						TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "VIP caller : No ",
+						mySession);
+						mySession.getVariable(IProjectVariables.GLOBAL)
+						.getComplexVariable()
+						.getField(IProjectVariables.GLOBAL_FIELD_VIP_CALLER)
+						.setValue("no");
+						callData.setVipFlag("no");
+					}
+				}
+				else
+				{
+					TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "VIP caller : No ",
+					mySession);
+					mySession.getVariable(IProjectVariables.GLOBAL).getComplexVariable()
+					.getField(IProjectVariables.GLOBAL_FIELD_VIP_CALLER).setValue("no");
+					callData.setVipFlag("no");
+				}
+			}
+			catch (Exception e)
+			{
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+				" Error in vip field" + e.getMessage(), mySession);
+			}
+
+			try
+			{
+				node = el.getElementsByTagName("activeDirectoryName");
+				String u_ldap_domain = node.item(0).getTextContent();
+				serviceNowBean.setLDAP_Domain(u_ldap_domain);
+				callData.setLdap_domain(u_ldap_domain);
+				if (u_ldap_domain.equalsIgnoreCase("r1-core"))
+				{
+					TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+					"R1 Core caller : Yes ", mySession);
+					mySession.getVariable(IProjectVariables.GLOBAL).getComplexVariable()
+					.getField(IProjectVariables.GLOBAL_FIELD_LDAP_R_1CORE)
+					.setValue("yes");
+				}
+				else
+				{
+					TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "R1 Core caller : No ",
+					mySession);
+					mySession.getVariable(IProjectVariables.GLOBAL).getComplexVariable()
+					.getField(IProjectVariables.GLOBAL_FIELD_LDAP_R_1CORE)
+					.setValue("no");
+				}
+			}
+
+			catch (Exception e)
+			{
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, " Error in ldap field"
+				+ e.getMessage(), mySession);
+			}
+			try
+			{
+				node = el.getElementsByTagName("businessUnits");
+				String u_l2_manager = node.item(0).getTextContent();
+				if (!(u_l2_manager == null) && !(u_l2_manager.equalsIgnoreCase(""))
+						&& !(u_l2_manager.equalsIgnoreCase("no")))
+				{
+					TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "u_l2_manager :"
+					+ u_l2_manager, mySession);
+
+					serviceNowBean.setU_l2_manager(u_l2_manager);
+					callData.setL2_Manager(u_l2_manager);
+					mySession.getVariable(IProjectVariables.GLOBAL).getComplexVariable()
+					.getField(IProjectVariables.GLOBAL_FIELD_LEVEL_2MANAGER)
+					.setValue("true");
+
+					serviceNowBean.setU_l4_manager(u_l2_manager);
+					callData.setL4_Manager(u_l2_manager);
+
+					serviceNowBean.setU_l5_manager(u_l2_manager);
+					callData.setL5_Manager(u_l2_manager);
+				}
+				else
+				{
+					TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "u_l2_manager : Null ",
+					mySession);
+					mySession.getVariable(IProjectVariables.GLOBAL).getComplexVariable()
+					.getField(IProjectVariables.GLOBAL_FIELD_LEVEL_2MANAGER)
+					.setValue("false");
+				}
+			}
+			catch (Exception e)
+			{
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "u_l2_manager : Null "
+				+ e.getMessage(), mySession);
+			}
+
+			TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+			"getServcie now values Exit : Enter " + serviceNowBean, mySession);
+			mySession.getVariable(IProjectVariables.SERVICE_NOW).getComplexVariable()
+			.getField(IProjectVariables.SERVICE_NOW_FIELD_DATA)
+			.setValue(serviceNowBean);
+			mySession.getVariable(IProjectVariables.CALL_DATA).getSimpleVariable()
+			.setValue(callData);
+
+		}
+		catch (SocketTimeoutException toe)
+		{
+			toe.printStackTrace();
+			TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, " Service now TimeOut : "
+			+ toe, mySession);
+			return -1;
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+			TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "Servcie Now Error : " + e,
+			mySession);
+			return -1;
+		}
+		finally
+		{
+			// if (is != null)
+			// {
+			// try
+			// {
+			// is.close();
+			// }
+			// catch (IOException e)
+			// {
+			// }
+			// }
+			if (con != null)
+			{
+				con.disconnect();
+			}
+
+		}
+		return responseCode;
+	}
+
+}
