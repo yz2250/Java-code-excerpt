@@ -1,0 +1,274 @@
+package com.aig.db;
+
+import java.sql.CallableStatement;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+
+import beans.CallData;
+
+import com.aig.common.Constants;
+import com.avaya.sce.runtime.tracking.TraceInfo;
+import com.avaya.sce.runtimecommon.ITraceInfo;
+import com.avaya.sce.runtimecommon.SCESession;
+
+/**
+* Perform various database operations required in application.
+* 
+* @version 1.0
+*/
+public class DBOperations
+{
+
+	/**
+* Get configurable properties,store caller info in IVR detail table insert
+* call data for report
+* 
+* @param mySession mySession
+* @param callData callData
+*/
+	@SuppressWarnings("static-method")
+	public void setReportData(SCESession mySession, CallData callData)
+	{
+		TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "Entering setReportData ",
+		mySession);
+		TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "setReportData : CallData : "
+		+ callData, mySession);
+
+		Connection con = null;
+		Statement stmt = null;
+		String sql = null;
+		try
+		{
+			con = DBManager.getConnection();
+			stmt = con.createStatement();
+			stmt.setQueryTimeout(Integer.parseInt(Constants.DBTimeOut));
+			sql =
+			"insert into ivr_detail (eduid,call_timestamp,caller_id,vdn,bu_id,issue_id,survey_part) values"
+			+ " ('"
+			+ callData.getCall_ID()
+			+ "','"
+			+ callData.getCallStartTime()
+			+ "','"
+			+ callData.getSys_ID()
+			+ "','"
+			+ callData.getVDN()
+			+ "','"
+			+ callData.getBusinessUnit()
+			+ "','"
+			+ callData.getIssueID()
+			+ " ','"
+			+ callData.getSurveyPart() + "')";
+
+			TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "SQL : " + sql, mySession);
+			boolean status = stmt.execute(sql);
+			TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "setReportData Success ",
+			mySession);
+		}
+		catch (Exception exception)
+		{
+			TraceInfo.trace(ITraceInfo.TRACE_LEVEL_ERROR, "setReportData ; Error : ",
+			exception, mySession);
+		}
+		finally
+		{
+			try
+			{
+				if (stmt != null && con != null)
+				{
+					stmt.close();
+					con.close();
+				}
+			}
+			catch (SQLException a_Exception)
+			{
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_ERROR,
+				"setReportData ; Error : ", a_Exception, mySession);
+			}
+		}
+		TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "setReportData : Exit",
+		mySession);
+	}
+
+	/**
+* Stored procedure to get the Exit VDN
+* 
+* @param mySession mySession
+* @param DNIS DNIS
+* @param vipFlag vipFlag
+* @param BusinessUnit BusinessUnit
+* @param IssueID IssueID
+* @return String
+*/
+	@SuppressWarnings("static-method")
+	public String getExitVDN(SCESession mySession, String DNIS, String vipFlag,
+	String BusinessUnit, String IssueID)
+	{
+
+		TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "Entering GetExitVDN ",
+		mySession);
+		TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "GetExitVDN : EntryVDN = : "
+		+ DNIS, mySession);
+		TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "GetExitVDN : VIP Flag = : "
+		+ vipFlag, mySession);
+		TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+		"GetExitVDN : Business Unit = : " + BusinessUnit, mySession);
+		TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG,
+		"GetExitVDN : Entered Issue ID = : " + IssueID, mySession);
+		Connection con = null;
+		ResultSet rs = null;
+		String sql = null;
+		String vdn = "";
+		String temp = "";
+		String result = null;
+		CallableStatement callableStatement = null;
+		try
+		{
+			con = DBManager.getConnection();
+			sql = "execute sp_vdn_route ?,?,?,?";
+			callableStatement = con.prepareCall(sql);
+			callableStatement.setQueryTimeout(Integer.parseInt(Constants.DBTimeOut));
+			callableStatement.setString(1, DNIS);
+			callableStatement.setString(2, vipFlag);
+			callableStatement.setString(3, BusinessUnit);
+			callableStatement.setString(4, IssueID);
+			rs = callableStatement.executeQuery();
+			while (rs.next())
+			{
+				result = rs.getString(1);
+			}
+		}
+		catch (Exception e)
+		{
+			TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "getExitVDN ; Error : ", e,
+			mySession);
+			vdn = temp;
+		}
+		finally
+		{
+			try
+			{
+				if (callableStatement != null && con != null)
+				{
+					callableStatement.close();
+					con.close();
+				}
+			}
+			catch (SQLException a_Exception)
+			{
+				TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "getExitVDN ; Error : ",
+				a_Exception, mySession);
+			}
+		}
+
+		TraceInfo.trace(ITraceInfo.TRACE_LEVEL_DEBUG, "getExitVDN : Exit : vdn : "
+		+ result, mySession);
+		return result;
+	}
+
+	/**
+* Stored procedure to get the BU
+* 
+* @param buRequest buRequest
+* @return String
+*/
+	@SuppressWarnings("static-method")
+	public String getBU(String buRequest)
+	{
+		String result = null;
+		Connection con = null;
+		ResultSet rs = null;
+		CallableStatement callableStatement = null;
+		try
+		{
+			con = DBManager.getConnection();
+			String sql = "execute sp_get_bu_id ?";
+			callableStatement = con.prepareCall(sql);
+			callableStatement.setQueryTimeout(Integer.parseInt(Constants.DBTimeOut));
+			callableStatement.setString(1, buRequest);
+
+			rs = callableStatement.executeQuery();
+			while (rs.next())
+			{
+				result = rs.getString(1);
+			}
+			System.out.println("Business Unit is  : " + result);
+		}
+		catch (Exception e)
+		{
+			System.out.println("Error in DB: " + e);
+		}
+		finally
+		{
+			try
+			{
+				if (callableStatement != null && con != null)
+				{
+					callableStatement.close();
+					con.close();
+				}
+			}
+			catch (SQLException a_Exception)
+			{
+				System.out.println("Error in DB: " + a_Exception);
+			}
+		}
+		return result;
+	}
+
+	/**
+* Stored procedure to get the Flow ID
+* 
+* @param EntryVDN EntryVDN
+* @return String
+*/
+	@SuppressWarnings("static-method")
+	public String getAppID(String EntryVDN)
+	{
+		String result = null;
+		Connection con = null;
+		ResultSet rs = null;
+		CallableStatement callableStatement = null;
+		try
+		{
+			con = DBManager.getConnection();
+			String sql = "execute sp_get_flow_id ?";
+			callableStatement = con.prepareCall(sql);
+			callableStatement.setQueryTimeout(Integer.parseInt(Constants.DBTimeOut));
+			callableStatement.setString(1, EntryVDN);
+			rs = callableStatement.executeQuery();
+
+			while (rs.next())
+			{
+				String flowId = rs.getString(1);
+				String instanceId = rs.getString(2);
+
+				result = flowId + "#" + instanceId;
+			}
+		}
+
+		catch (Exception e)
+		{
+			System.out.println("Error in DB: " + e);
+			return "failure";
+		}
+		finally
+		{
+			try
+			{
+				if (callableStatement != null && con != null)
+				{
+					callableStatement.close();
+					con.close();
+				}
+			}
+			catch (SQLException a_Exception)
+			{
+				System.out.println("Error in DB: " + a_Exception);
+			}
+		}
+		return result;
+	}
+
+}
